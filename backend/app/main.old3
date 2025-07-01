@@ -86,25 +86,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.post("/alerts")
 async def receive_alert(request: Request):
-    payload = await request.json()
-
-    # If n8n sent a list, handle each entry
-    if isinstance(payload, list):
-        count = 0
-        for item in payload:
-            message = item.get("message")
-            if not message:
-                continue
-            await manager.broadcast(message)
-            count += 1
-        return {"status": f"{count} alerts broadcasted"}
-
-    # Otherwise expect a single object
-    if not isinstance(payload, dict):
-        raise HTTPException(400, "Invalid payload")
-    message = payload.get("message")
+    alert = await request.json()
+    message = alert.get("message", None)
     if not message:
-        raise HTTPException(400, "Missing 'message' field")
+        raise HTTPException(status_code=400, detail="Missing 'message' in alert payload")
     await manager.broadcast(message)
     return {"status": "alert broadcasted"}
-

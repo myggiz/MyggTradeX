@@ -1,0 +1,12 @@
+{
+  "settings": [
+    {
+      "provider": "dyn",
+      "domain": "iot.selfip.net",
+      "username": "myggiz",
+      "client_key": "ed2441fc7e0942d0b03cebd0b236f59e",
+      "ip_version": "ipv4",
+      "ipv6_suffix": ""
+    }
+  ]
+}

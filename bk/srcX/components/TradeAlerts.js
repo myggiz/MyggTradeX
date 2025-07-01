@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 export default function TradeAlerts() {
   const [alerts, setAlerts] = useState([]);
   useEffect(() => {
-    const ws = new WebSocket("ws://192.168.178.163:8000/ws/alerts");
+    const ws = new WebSocket("ws://localhost:8000/ws/alerts");
 
     ws.onmessage = (event) => {
       setAlerts((prev) => [event.data, ...prev]);

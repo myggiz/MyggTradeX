@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:15
+    container_name: trading-postgres
+    environment:
+      POSTGRES_USER: myggtradex
+      POSTGRES_PASSWORD: secretasfuck
+      POSTGRES_DB: tradingdb
+    volumes:
+      - myggtradex-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  myggtradex-data:

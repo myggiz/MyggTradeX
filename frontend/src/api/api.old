@@ -1,23 +1,13 @@
-// const API_BASE = "http://localhost:8000";
-export const API_BASE = "http://192.168.178.163:8000";
-
-// rest of your functions...
-
+export const API_BASE = "http://localhost:8000";
 
 export async function login(username, password) {
-  console.log("Logging in:", username);
   const res = await fetch(`${API_BASE}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ username, password }),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("Login failed:", text);
-    throw new Error("Login failed");
-  }
+  if (!res.ok) throw new Error("Login failed");
   const data = await res.json();
-  console.log("Login success, token:", data.access_token);
   return data.access_token;
 }
 

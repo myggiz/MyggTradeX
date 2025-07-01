@@ -4,8 +4,6 @@ import PortfolioList from "./components/PortfolioList";
 import TradeForm from "./components/TradeForm";
 import TradeAlerts from "./components/TradeAlerts";
 import { login } from "./api/api";
-import LiveAlerts from "./components/LiveAlerts";
-
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || null);
@@ -26,7 +24,6 @@ export default function App() {
   return (
     <div>
       <h1>Trading Dashboard</h1>
-      <LiveAlerts />	
       <TradeAlerts />
       <PortfolioList token={token} key={refreshFlag} />
       <TradeForm token={token} onTradeSubmitted={refreshPortfolio} />

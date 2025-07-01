@@ -1,0 +1,211 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 0,
+              "minute": 0,
+              "second": 0
+            }
+          ]
+        },
+        "mode": "every5minutes"
+      },
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 250]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.example.com/marketdata",
+        "jsonParameters": false,
+        "options": {},
+        "headerParametersJson": []
+      },
+      "name": "Fetch Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 250]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = items[0].json;\n\nfor (const stock of data.stocks) {\n  stock.rsi = Math.floor(Math.random() * 100);\n  stock.ema = stock.price * 0.95;\n}\nreturn [{ json: { stocks: data.stocks } }];"
+      },
+      "name": "Calculate Indicators",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 250]
+    },
+    {
+      "parameters": {
+        "assistantId": "",
+        "operation": "message",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a stock trading assistant."
+          },
+          {
+            "role": "user",
+            "content": "Given this market data:\n{{$json.stocks}}\nPlease provide buy, sell, or hold recommendations with brief reasons in JSON array format."
+          }
+        ],
+        "model": "gpt-4o-mini"
+      },
+      "name": "OpenAI Assistant",
+      "type": "n8n-nodes-langchain.openai.assistant",
+      "typeVersion": 1,
+      "position": [850, 250],
+      "credentials": {
+        "openAiApi": {
+          "id": "your-openai-credential-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const recommendations = JSON.parse(items[0].json.choices[0].message.content);\nreturn recommendations.map(rec => ({ json: rec }));"
+      },
+      "name": "Parse LLM Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:8000/alerts",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": [
+          {
+            "name": "message",
+            "value": "{{$json.action}} recommendation: {{$json.symbol}} because {{$json.reason}}"
+          }
+        ]
+      },
+      "name": "Send Alerts to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {},
+      "name": "Manual BUY Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 600],
+      "webhookId": "manual-buy-webhook",
+      "httpMethod": "POST",
+      "path": "manual-buy"
+    },
+    {
+      "parameters": {
+        "functionCode": "const manualBuy = items[0].json;\nconst prev = await $getWorkflowStaticData('global').watchlist || [];\nfor(const item of manualBuy) {\n  if(!prev.includes(item.symbol)) prev.push(item.symbol);\n}\nawait $setWorkflowStaticData('global', { watchlist: prev });\nreturn [{ json: { watchlist: prev } }];"
+      },
+      "name": "Update Watchlist",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "const watchlist = await $getWorkflowStaticData('global').watchlist || [];\nconst stocks = items[0].json.stocks || [];\nconst monitored = stocks.filter(s => watchlist.includes(s.symbol));\nconst sellSignals = monitored.filter(s => s.price > s.ema * 1.05).map(s => ({ symbol: s.symbol, action: 'SELL', reason: 'Price above EMA by 5%' }));\nreturn sellSignals.map(s => ({ json: s }));"
+      },
+      "name": "Watchlist Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:8000/alerts",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": [
+          {
+            "name": "message",
+            "value": "{{$json.action}} alert for watchlist symbol {{$json.symbol}}: {{$json.reason}}"
+          }
+        ]
+      },
+      "name": "Send Watchlist Alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "run-backtest"
+      },
+      "name": "Manual Backtest Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [150, 100]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://www.alphavantage.co/query",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "function", "value": "TIME_SERIES_DAILY_ADJUSTED" },
+            { "name": "symbol", "value": "AAPL" },
+            { "name": "apikey", "value": "YOUR_API_KEY" }
+          ]
+        }
+      },
+      "name": "Fetch Historical Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [350, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const timeSeries = items[0].json['Time Series (Daily)'];\nconst dates = Object.keys(timeSeries).sort();\n\nfunction calculateRSI(prices, period=14) {\n  let gains = 0, losses = 0;\n  for(let i=1; i<=period; i++) {\n    const diff = prices[i] - prices[i-1];\n    if(diff > 0) gains += diff; else losses -= diff;\n  }\n  let rs = gains / (losses || 1);\n  return 100 - 100 / (1 + rs);\n}\n\nconst closePrices = dates.map(d => parseFloat(timeSeries[d]['4. close']));\n\nlet cash = 10000;\nlet shares = 0;\nlet trades = [];\n\nfor(let i=14; i<closePrices.length; i++) {\n  const rsi = calculateRSI(closePrices.slice(i-14, i+1));\n  const price = closePrices[i];\n\n  if(rsi < 30 && cash >= price) {\n    cash -= price;\n    shares += 1;\n    trades.push({ date: dates[i], action: 'BUY', price });\n  } else if(rsi > 70 && shares > 0) {\n    cash += shares * price;\n    trades.push({ date: dates[i], action: 'SELL', price, shares });\n    shares = 0;\n  }\n}\n\nreturn [{ json: { trades, finalCash: cash, sharesLeft: shares } }];"
+      },
+      "name": "Run Backtest Logic",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [550, 100]
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [[{"node": "Fetch Market Data", "type": "main", "index": 0}]]
+    },
+    "Fetch Market Data": {
+      "main": [[{"node": "Calculate Indicators", "type": "main", "index": 0}]]
+    },
+    "Calculate Indicators": {
+      "main": [[{"node": "OpenAI Assistant", "type": "main", "index": 0}, {"node": "Watchlist Analysis", "type": "main", "index": 1}]]
+    },
+    "OpenAI Assistant": {
+      "main": [[{"node": "Parse LLM Output", "type": "main", "index": 0}]]
+    },
+    "Parse LLM Output": {
+      "main": [[{"node": "Send Alerts to Backend", "type": "main", "index": 0}]]
+    },
+    "Manual BUY Webhook": {
+      "main": [[{"node": "Update Watchlist", "type": "main", "index": 0}]]
+    },
+    "Update Watchlist": {
+      "main": [[{"node": "Fetch Market Data", "type": "main", "index": 0}]]
+    },
+    "Watchlist Analysis": {
+      "main": [[{"node": "Send Watchlist Alerts", "type": "main", "index": 0}]]
+    },
+    "Manual Backtest Trigger": {
+      "main": [[{"node": "Fetch Historical Data", "type": "main", "index": 0}]]
+    },
+    "Fetch Historical Data": {
+      "main": [[{"node": "Run Backtest Logic", "type": "main", "index": 0}]]
+    }
+  }
+}

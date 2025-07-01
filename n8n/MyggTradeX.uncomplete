@@ -1,0 +1,167 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 0,
+              "minute": 0,
+              "second": 0
+            }
+          ]
+        },
+        "mode": "every5minutes"
+      },
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [250, 250]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://api.example.com/marketdata",
+        "jsonParameters": false,
+        "options": {},
+        "headerParametersJson": []
+      },
+      "name": "Fetch Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [450, 250]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = items[0].json;\n\nfor (const stock of data.stocks) {\n  stock.rsi = Math.floor(Math.random() * 100);\n  stock.ema = stock.price * 0.95;\n}\nreturn [{ json: { stocks: data.stocks } }];"
+      },
+      "name": "Calculate Indicators",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 250]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "max_tokens": 400,
+        "top_p": 1,
+        "frequency_penalty": 0,
+        "presence_penalty": 0,
+        "stopSequences": [],
+        "returnFullText": false,
+        "prompt": "You are a stock trading assistant. Given this market data:\n{{ $json.stocks }}\nPlease provide buy, sell, or hold recommendations with brief reasons in JSON array format like [{\"symbol\": \"AAPL\", \"action\": \"BUY\", \"reason\": \"RSI below 30\"}]."
+      },
+      "name": "OpenAI Analysis",
+      "type": "n8n-nodes-base.openai",
+      "typeVersion": 1,
+      "position": [850, 250],
+      "credentials": {
+        "openAIApi": {
+          "id": "your-openai-credential-id"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const recommendations = JSON.parse(items[0].json.choices[0].message.content);\nreturn recommendations.map(rec => ({ json: rec }));"
+      },
+      "name": "Parse LLM Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 250]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:8000/alerts",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": [
+          {
+            "name": "message",
+            "value": "{{$json.action}} recommendation: {{$json.symbol}} because {{$json.reason}}"
+          }
+        ]
+      },
+      "name": "Send Alerts to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1250, 250]
+    },
+    {
+      "parameters": {},
+      "name": "Manual BUY Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 600],
+      "webhookId": "manual-buy-webhook",
+      "httpMethod": "POST",
+      "path": "manual-buy"
+    },
+    {
+      "parameters": {
+        "functionCode": "const manualBuy = items[0].json;\nconst prev = await $getWorkflowStaticData('global').watchlist || [];\nfor(const item of manualBuy) {\n  if(!prev.includes(item.symbol)) prev.push(item.symbol);\n}\nawait $setWorkflowStaticData('global', { watchlist: prev });\nreturn [{ json: { watchlist: prev } }];"
+      },
+      "name": "Update Watchlist",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "const watchlist = await $getWorkflowStaticData('global').watchlist || [];\nconst stocks = items[0].json.stocks || [];\nconst monitored = stocks.filter(s => watchlist.includes(s.symbol));\nconst sellSignals = monitored.filter(s => s.price > s.ema * 1.05).map(s => ({ symbol: s.symbol, action: 'SELL', reason: 'Price above EMA by 5%' }));\nreturn sellSignals.map(s => ({ json: s }));"
+      },
+      "name": "Watchlist Analysis",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://localhost:8000/alerts",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": [
+          {
+            "name": "message",
+            "value": "{{$json.action}} alert for watchlist symbol {{$json.symbol}}: {{$json.reason}}"
+          }
+        ]
+      },
+      "name": "Send Watchlist Alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "run-backtest"
+      },
+      "name": "Manual Backtest Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [150, 100]
+    },
+    {
+      "parameters": {
+        "requestMethod": "GET",
+        "url": "https://www.alphavantage.co/query",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "function", "value": "TIME_SERIES_DAILY_ADJUSTED" },
+            { "name": "symbol", "value": "AAPL" },
+            { "name": "apikey", "value": "YOUR_API_KEY" }
+          ]
+        }
+      },
+      "name": "Fetch Historical Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [350, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const timeSeries = items[0].json['Time Series (Daily)'];\n

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status, Request
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import List
@@ -7,8 +7,6 @@ from .database import engine
 from .dependencies import get_db
 from fastapi.middleware.cors import CORSMiddleware
 from .websocket import manager
-from fastapi import Request
-
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -16,7 +14,7 @@ app = FastAPI(title="Trading Platform Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://iot.selfip.net:3000", "http://localhost:3000"],  # allow your frontend
+    allow_origins=["http://iot.selfip.net:3000","http://localhost:3000"],  # allow your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -81,30 +79,13 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.broadcast(f"Message: {data}")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-
 # New endpoint to receive alerts from n8n and broadcast to clients
 
 @app.post("/alerts")
 async def receive_alert(request: Request):
-    payload = await request.json()
-
-    # If n8n sent a list, handle each entry
-    if isinstance(payload, list):
-        count = 0
-        for item in payload:
-            message = item.get("message")
-            if not message:
-                continue
-            await manager.broadcast(message)
-            count += 1
-        return {"status": f"{count} alerts broadcasted"}
-
-    # Otherwise expect a single object
-    if not isinstance(payload, dict):
-        raise HTTPException(400, "Invalid payload")
-    message = payload.get("message")
+    alert = await request.json()
+    message = alert.get("message", None)
     if not message:
-        raise HTTPException(400, "Missing 'message' field")
+        raise HTTPException(status_code=400, detail="Missing 'message' in alert payload")
     await manager.broadcast(message)
     return {"status": "alert broadcasted"}
-
